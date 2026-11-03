@@ -5,9 +5,15 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from app.config import settings   # URL de la base depuis le .env
+from app.database import Base    # contient metadata de toutes les tables
+import app.models                # noqa: F401  (charge les 9 modèles)
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+# On injecte l'URL du .env (les % doivent être doublés pour configparser)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -18,7 +24,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata  # Alembic compare cette structure à la base
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
