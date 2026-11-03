@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from app.exceptions import enregistrer_handlers
+from app.routers import auth
 
 app = FastAPI(
     title="API Atelier de couture",
@@ -10,6 +11,10 @@ app = FastAPI(
 
 enregistrer_handlers(app)
 
+# Toutes les routes métier sont sous /api/v1 (sauf /health)
+api_v1 = APIRouter(prefix="/api/v1")
+api_v1.include_router(auth.router)
+app.include_router(api_v1)
 
 @app.get("/health")
 def health():
