@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import GenreClient
@@ -25,3 +26,12 @@ class Client(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Un client a plusieurs mesures et plusieurs commandes
+    mesures = relationship(
+        "Mesure",
+        cascade="all, delete-orphan",  # supprimer le client supprime ses mesures
+        passive_deletes=True,          # laisse PostgreSQL (ON DELETE CASCADE) le faire
+        order_by="Mesure.date_prise.desc()",
+    )
+    # Pas de cascade : le service refuse la suppression s'il y a des commandes (RG4)
+    commandes = relationship("Commande", back_populates="client")
