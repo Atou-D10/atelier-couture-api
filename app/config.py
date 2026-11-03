@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str | None = None
     ADMIN_NOM_COMPLET: str = "Administrateur"
 
+    TEST_DATABASE_URL: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
