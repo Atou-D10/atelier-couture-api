@@ -58,6 +58,15 @@ class Commande(Base):
         back_populates="commande",
         order_by="HistoriqueStatut.id",
     )
+    paiements = relationship(
+        "Paiement",
+        back_populates="commande",
+        order_by="Paiement.id",  # ordre de saisie (route 33)
+    )
+    # uselist=False : 0 ou 1 livraison, donc un objet et non une liste
+    livraison = relationship(
+        "Livraison", back_populates="commande", uselist=False
+    )
 
     # Le solde n'est pas stocké : il se calcule (RG7)
     @property
