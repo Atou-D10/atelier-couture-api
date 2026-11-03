@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI
 
 from app.exceptions import enregistrer_handlers
-from app.routers import auth, clients, utilisateurs
+from app.routers import auth, catalogue, clients, utilisateurs
 
 app = FastAPI(
     title="API Atelier de couture",
@@ -16,6 +16,7 @@ api_v1 = APIRouter(prefix="/api/v1")
 api_v1.include_router(auth.router)
 api_v1.include_router(clients.router)
 api_v1.include_router(utilisateurs.router)
+api_v1.include_router(catalogue.router)
 app.include_router(api_v1)
 
 @app.get("/health")
