@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -81,5 +81,5 @@ class ClientResume(BaseModel):
     chiffre_affaires: int
     total_paye: int
     solde_du: int
-    derniere_commande: datetime | None  # date de la commande la plus récente
+    derniere_commande: date | None  # date de la commande la plus récente
     a_des_mesures: bool
