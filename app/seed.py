@@ -54,10 +54,29 @@ def creer_catalogue(db) -> None:
         )
         print(f"Prestation créée : {nom}")
 
-
+def creer_comptes_demo(db) -> None:
+    """Comptes de démonstration : créés seulement si email et mot de passe sont définis."""
+    comptes = [
+        (settings.DEMO_ACCUEIL_EMAIL, settings.DEMO_ACCUEIL_PASSWORD,
+         "Accueil Démo", RoleUtilisateur.accueil),
+        (settings.DEMO_TAILLEUR_EMAIL, settings.DEMO_TAILLEUR_PASSWORD,
+         "Tailleur Démo", RoleUtilisateur.tailleur),
+    ]
+    for email, mdp, nom, role in comptes:
+        if not email or not mdp:
+            continue
+        email = email.lower()
+        if db.scalar(select(Utilisateur).where(Utilisateur.email == email)):
+            print(f"Compte déjà présent : {email}")
+            continue
+        db.add(Utilisateur(email=email, nom_complet=nom,
+                           mot_de_passe_hash=hash_password(mdp), role=role, actif=True))
+        print(f"Compte créé : {email} ({role.value})")
+        
 def main() -> None:
     with SessionLocal() as db:
         creer_admin(db)
+        creer_comptes_demo(db)
         creer_catalogue(db)
         db.commit()  # une seule transaction pour tout le seed
 
