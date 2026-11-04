@@ -11,7 +11,7 @@ from app.models.mesure import Mesure
 from app.models.utilisateur import Utilisateur
 from app.models.enums import RoleUtilisateur, StatutCommande
 
-from app.schemas.commande import CommandeCreate,  CommandeUpdate, LigneCommandeCreate
+from app.schemas.commande import CommandeCreate,  CommandeUpdate, LigneCommandeCreate, StatutChange
 
 from app.exceptions import ConflitError,InterditError, IntrouvableError, ValidationMetierError
 from app.models.type_vetement import TypeVetement
@@ -416,3 +416,46 @@ def retirer_ligne(db: Session, commande_id: int, ligne_id: int) -> Commande:
     recalculer_montants(commande)
     db.flush()
     return commande
+
+# ---------- Route 28 : changement de statut ----------
+
+def changer_statut(
+    db: Session, commande_id: int, data: StatutChange, utilisateur: Utilisateur
+) -> Commande:
+    commande = obtenir(db, commande_id)
+
+    # Un tailleur qui tente d'annuler doit recevoir 403 même sur une commande figée,
+    # donc verifier_transition passe en premier (il contrôle aussi les statuts finaux).
+    verifier_transition(
+        actuel=commande.statut,
+        demande=data.statut,
+        role=utilisateur.role,
+        a_recu_acompte=commande.montant_paye > 0,
+        commentaire=data.commentaire,
+    )
+
+    ancien = commande.statut
+    commande.statut = data.statut
+
+    # RG15 : chaque changement est enregistré dans l'historique
+    db.add(HistoriqueStatut(
+        commande_id=commande.id,
+        ancien_statut=ancien,
+        nouveau_statut=data.statut,
+        commentaire=data.commentaire,
+        utilisateur_id=utilisateur.id,
+    ))
+    db.flush()
+    return commande
+
+
+# ---------- Route 29 : historique ----------
+
+def historique(db: Session, commande_id: int) -> list[HistoriqueStatut]:
+    """Liste chronologique des changements de statut."""
+    obtenir(db, commande_id)  # 404 si inconnue
+    return list(db.scalars(
+        select(HistoriqueStatut)
+        .where(HistoriqueStatut.commande_id == commande_id)
+        .order_by(HistoriqueStatut.date_changement, HistoriqueStatut.id)
+    ))
