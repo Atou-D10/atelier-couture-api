@@ -32,8 +32,8 @@ def planifier(db: Session, commande_id: int, data: LivraisonPlanifier) -> Livrai
 
     livraison = commande.livraison
     if livraison is None:
-        livraison = Livraison(commande_id=commande.id, statut=StatutLivraison.planifiee)
-        db.add(livraison)
+        livraison = Livraison(statut=StatutLivraison.planifiee)
+        commande.livraison = livraison
     livraison.mode = data.mode
     livraison.date_prevue = data.date_prevue
     livraison.adresse = data.adresse
@@ -80,10 +80,10 @@ def confirmer(
     livraison = commande.livraison
     if livraison is None:
         livraison = Livraison(
-            commande_id=commande.id, mode=ModeLivraison.retrait_atelier,
+            mode=ModeLivraison.retrait_atelier,
             date_prevue=commande.date_livraison_prevue,
         )
-        db.add(livraison)
+        commande.livraison = livraison  # rattache des deux côtés (relation à jour)
     livraison.statut = StatutLivraison.livree
     livraison.date_effective = date_effective
 
