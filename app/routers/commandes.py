@@ -8,7 +8,8 @@ from app.dependencies import get_current_user, require_roles
 from app.models.enums import RoleUtilisateur, StatutCommande
 from app.models.utilisateur import Utilisateur
 from app.schemas.commande import (
-    CommandeCreate, CommandeListe, CommandeRead, CommandeUpdate, LigneCommandeCreate,
+    CommandeCreate, CommandeListe, CommandeRead, CommandeUpdate,
+    HistoriqueStatutRead, LigneCommandeCreate, StatutChange,
 )
 from app.schemas.common import Page
 from app.services import commandes as service
@@ -74,3 +75,21 @@ def retirer_ligne(commande_id: int, ligne_id: int, db: Session = Depends(get_db)
     commande = service.retirer_ligne(db, commande_id, ligne_id)
     db.commit()
     return service.vers_detail(commande)
+
+
+@router.post("/{commande_id}/statut", response_model=CommandeRead)  # route 28
+def changer_statut(
+    commande_id: int,
+    data: StatutChange,
+    db: Session = Depends(get_db),
+    user: Utilisateur = Depends(get_current_user),  # tous les rôles (RG14 dans le service)
+):
+    commande = service.changer_statut(db, commande_id, data, user)
+    db.commit()
+    return service.vers_detail(commande)
+
+
+@router.get("/{commande_id}/historique", response_model=list[HistoriqueStatutRead])  # route 29
+def historique(commande_id: int, db: Session = Depends(get_db),
+               _: Utilisateur = Depends(get_current_user)):
+    return service.historique(db, commande_id)
