@@ -11,7 +11,7 @@ from app.models.mesure import Mesure
 from app.models.utilisateur import Utilisateur
 from app.models.enums import RoleUtilisateur, StatutCommande
 
-from app.schemas.commande import CommandeCreate
+from app.schemas.commande import CommandeCreate,  CommandeUpdate, LigneCommandeCreate
 
 from app.exceptions import ConflitError,InterditError, IntrouvableError, ValidationMetierError
 from app.models.type_vetement import TypeVetement
@@ -332,3 +332,87 @@ def lister(
         .limit(limit).offset(offset)
     ).all()
     return list(items), total
+
+
+# ---------- RG12 / RG10 : garde-fous ----------
+
+def verifier_modifiable(commande: Commande) -> None:
+    """RG12 : une commande livrée ou annulée n'est plus modifiable (409)."""
+    if commande.statut in (StatutCommande.livree, StatutCommande.annulee):
+        raise ConflitError(
+            f"La commande est « {commande.statut.value} » : elle n'est plus modifiable."
+        )
+
+
+def verifier_lignes_modifiables(commande: Commande) -> None:
+    """RG10 : lignes modifiables seulement en « en_attente » (409)."""
+    verifier_modifiable(commande)
+    if commande.statut != StatutCommande.en_attente:
+        raise ConflitError(
+            "Les lignes ne sont modifiables que tant que la commande est « en_attente »."
+        )
+
+
+def recalculer_montants(commande: Commande) -> None:
+    """RG7 : recalcule le total à partir des lignes et de la remise.
+    Refuse (409) un total inférieur au montant déjà payé."""
+    somme = somme_prestations([(l.quantite, l.prix_unitaire) for l in commande.lignes])
+    total = calculer_total(somme, commande.remise)  # 422 si remise > somme
+    verifier_total_vs_paye(total, commande.montant_paye)  # 409
+    commande.montant_total = total
+
+
+# ---------- Route 27 : modification ----------
+
+def modifier(db: Session, commande_id: int, data: CommandeUpdate) -> Commande:
+    commande = obtenir(db, commande_id)
+    verifier_modifiable(commande)  # RG12
+    champs = data.model_dump(exclude_unset=True)
+
+    if "mesure_id" in champs and champs["mesure_id"] is not None:
+        commande.mesure_id = resoudre_mesure(db, commande.client_id, champs["mesure_id"])  # RG9
+
+    if "date_livraison_prevue" in champs and champs["date_livraison_prevue"] is not None:
+        verifier_date_livraison(champs["date_livraison_prevue"], commande.date_commande)  # RG8
+        commande.date_livraison_prevue = champs["date_livraison_prevue"]
+
+    if "notes" in champs:
+        commande.notes = champs["notes"]
+
+    if "remise" in champs and champs["remise"] is not None:
+        commande.remise = champs["remise"]
+        recalculer_montants(commande)  # RG7
+
+    db.flush()
+    return commande
+
+
+# ---------- Routes 30 et 31 : lignes ----------
+
+def ajouter_ligne(db: Session, commande_id: int, data: LigneCommandeCreate) -> Commande:
+    commande = obtenir(db, commande_id)
+    verifier_lignes_modifiables(commande)  # RG10, RG12
+    prestation = charger_prestation_active(db, data.type_vetement_id)  # RG6
+    commande.lignes.append(LigneCommande(
+        type_vetement_id=prestation.id,
+        description=data.description,
+        quantite=data.quantite,
+        prix_unitaire=prix_de_la_ligne(prestation, data.prix_unitaire),
+    ))
+    recalculer_montants(commande)
+    db.flush()
+    return commande
+
+
+def retirer_ligne(db: Session, commande_id: int, ligne_id: int) -> Commande:
+    commande = obtenir(db, commande_id)
+    verifier_lignes_modifiables(commande)  # RG10, RG12
+    ligne = next((l for l in commande.lignes if l.id == ligne_id), None)
+    if ligne is None:
+        raise IntrouvableError(f"Ligne {ligne_id} introuvable dans cette commande.")
+    if len(commande.lignes) <= 1:
+        raise ConflitError("Une commande doit garder au moins une ligne.")  # RG10
+    commande.lignes.remove(ligne)  # delete-orphan supprime la ligne
+    recalculer_montants(commande)
+    db.flush()
+    return commande
